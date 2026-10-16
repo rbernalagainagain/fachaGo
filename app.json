@@ -27,7 +27,8 @@
         {
           "locationWhenInUsePermission": "FachaGo usa tu ubicación para moverte por el mapa del juego."
         }
-      ]
+      ],
+      "expo-status-bar"
     ]
   }
 }
