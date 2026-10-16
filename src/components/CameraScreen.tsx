@@ -3,7 +3,11 @@ import { useState } from 'react';
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { useWorldAnchor } from '../hooks/useWorldAnchor';
 import { PlayerAvatar } from './PlayerAvatar';
+
+/** Tamaño del avatar sin escalar, igual que en PlayerAvatar. */
+const AVATAR_SIZE = 64;
 
 type Props = {
   onClose: () => void;
@@ -50,12 +54,7 @@ export function CameraScreen({ onClose }: Props) {
           facing="back"
           onMountError={({ message }) => setMountError(message)}
         />
-        {/* La cámara mira hacia donde mira el jugador, así que la flecha siempre apunta al frente. */}
-        <View style={styles.avatarLayer} pointerEvents="none">
-          <View style={styles.avatarScale}>
-            <PlayerAvatar heading={0} cameraHeading={0} />
-          </View>
-        </View>
+        <AnchoredAvatar />
       </>
     );
   }
@@ -73,6 +72,27 @@ export function CameraScreen({ onClose }: Props) {
           <Text style={styles.closeLabel}>✕</Text>
         </Pressable>
       </SafeAreaView>
+    </View>
+  );
+}
+
+/**
+ * Avatar fijo en un punto del suelo delante del jugador: se desplaza por la pantalla
+ * al girar o inclinar el móvil. La flecha apunta al frente, en la dirección del ancla.
+ */
+function AnchoredAvatar() {
+  const point = useWorldAnchor();
+  if (!point) return null;
+
+  return (
+    <View
+      pointerEvents="none"
+      style={[
+        styles.avatar,
+        { left: point.x - AVATAR_SIZE / 2, top: point.y - AVATAR_SIZE / 2 },
+      ]}
+    >
+      <PlayerAvatar heading={0} cameraHeading={0} />
     </View>
   );
 }
@@ -96,12 +116,12 @@ const styles = StyleSheet.create({
   fill: {
     flex: 1,
   },
-  avatarLayer: {
-    ...StyleSheet.absoluteFill,
+  avatar: {
+    position: 'absolute',
+    width: AVATAR_SIZE,
+    height: AVATAR_SIZE,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  avatarScale: {
     transform: [{ scale: 2 }],
   },
   center: {
