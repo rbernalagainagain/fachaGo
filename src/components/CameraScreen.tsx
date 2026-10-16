@@ -77,7 +77,7 @@ export function CameraScreen({ onClose }: Props) {
 }
 
 /**
- * Avatar fijo en un punto del suelo delante del jugador: se desplaza por la pantalla
+ * Avatar en el suelo delante del jugador que le sigue con retraso: se desplaza por la pantalla
  * al girar o inclinar el móvil. La flecha apunta al frente, en la dirección del ancla.
  */
 function AnchoredAvatar() {

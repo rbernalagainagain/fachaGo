@@ -10,6 +10,8 @@ export type ScreenPoint = { x: number; y: number };
 const VERTICAL_FOV = 65;
 /** El ancla queda en el suelo, este ángulo por debajo del horizonte (grados). */
 const ANCHOR_BELOW_HORIZON = 15;
+/** Cuánto tarda el avatar en volver a ponerse delante al girar (s, constante de tiempo). */
+const FOLLOW_TIME = 0.4;
 /** Intervalo de lectura del sensor (ms). */
 const UPDATE_INTERVAL = 16;
 
@@ -32,25 +34,35 @@ function deviceAxes({ alpha, beta, gamma }: { alpha: number; beta: number; gamma
   return { right, up, forward };
 }
 
-/** Dirección del ancla: delante de la cámara en horizontal y algo por debajo del horizonte. */
-function anchorDirection(forward: Vec3, up: Vec3): Vec3 {
+/** Rumbo horizontal hacia el que apunta la cámara (radianes). */
+function cameraYaw(forward: Vec3, up: Vec3): number {
   // Si el móvil apunta casi al suelo, usamos hacia dónde apunta su parte de arriba.
-  let [hx, hy] = [forward[0], forward[1]];
-  if (Math.hypot(hx, hy) < 0.1) [hx, hy] = [up[0], up[1]];
-  const len = Math.hypot(hx, hy);
+  const [hx, hy] = Math.hypot(forward[0], forward[1]) < 0.1 ? up : forward;
+  return Math.atan2(hx, hy);
+}
+
+/** Dirección en el mundo de un punto del suelo con ese rumbo, algo por debajo del horizonte. */
+function anchorDirection(yaw: number): Vec3 {
   const below = toRad(ANCHOR_BELOW_HORIZON);
-  return [(hx / len) * Math.cos(below), (hy / len) * Math.cos(below), -Math.sin(below)];
+  return [Math.sin(yaw) * Math.cos(below), Math.cos(yaw) * Math.cos(below), -Math.sin(below)];
+}
+
+/** Diferencia entre dos ángulos llevada a [-π, π]. */
+function angleDelta(from: number, to: number): number {
+  return Math.atan2(Math.sin(to - from), Math.cos(to - from));
 }
 
 /**
- * Fija un punto del mundo delante del jugador al montarse y devuelve dónde cae en la
- * pantalla según cómo se gire o incline el móvil. `null` si queda detrás o fuera de la vista.
+ * Coloca un punto del suelo delante del jugador que le sigue con retraso al girar: el punto
+ * se desliza por la pantalla al mover el móvil y vuelve a ponerse delante en cuanto se para.
+ * Devuelve dónde cae en la pantalla, o `null` si queda fuera de la vista.
  * Si el móvil no tiene sensor de movimiento, el punto se queda en el centro.
  */
 export function useWorldAnchor(): ScreenPoint | null {
   const { width, height } = useWindowDimensions();
   const [point, setPoint] = useState<ScreenPoint | null>({ x: width / 2, y: height / 2 });
-  const anchorRef = useRef<Vec3 | null>(null);
+  const anchorYawRef = useRef<number | null>(null);
+  const lastUpdateRef = useRef(0);
   const sizeRef = useRef({ width, height });
 
   useEffect(() => {
@@ -67,8 +79,16 @@ export function useWorldAnchor(): ScreenPoint | null {
       subscription = DeviceMotion.addListener(({ rotation }) => {
         if (!rotation) return;
         const { right, up, forward } = deviceAxes(rotation);
-        anchorRef.current ??= anchorDirection(forward, up);
-        const anchor = anchorRef.current;
+        const targetYaw = cameraYaw(forward, up);
+
+        // El rumbo del punto se acerca al de la cámara de forma exponencial.
+        const now = Date.now();
+        const dt = lastUpdateRef.current ? (now - lastUpdateRef.current) / 1000 : 0;
+        lastUpdateRef.current = now;
+        const previousYaw = anchorYawRef.current ?? targetYaw;
+        const follow = 1 - Math.exp(-dt / FOLLOW_TIME);
+        anchorYawRef.current = previousYaw + angleDelta(previousYaw, targetYaw) * follow;
+        const anchor = anchorDirection(anchorYawRef.current);
 
         const depth = dot(anchor, forward);
         if (depth <= 0.05) {
