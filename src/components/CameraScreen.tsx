@@ -4,6 +4,7 @@ import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useWorldAnchor } from '../hooks/useWorldAnchor';
+import { CameraGlow } from './CameraGlow';
 import { PlayerAvatar } from './PlayerAvatar';
 
 /** Tamaño del avatar sin escalar, igual que en PlayerAvatar. */
@@ -54,6 +55,7 @@ export function CameraScreen({ onClose }: Props) {
           facing="back"
           onMountError={({ message }) => setMountError(message)}
         />
+        <CameraGlow />
         <AnchoredAvatar />
       </>
     );
