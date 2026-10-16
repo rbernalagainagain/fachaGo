@@ -3,6 +3,8 @@ import { useState } from 'react';
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { PlayerAvatar } from './PlayerAvatar';
+
 type Props = {
   onClose: () => void;
 };
@@ -42,11 +44,19 @@ export function CameraScreen({ onClose }: Props) {
     );
   } else {
     content = (
-      <CameraView
-        style={styles.fill}
-        facing="back"
-        onMountError={({ message }) => setMountError(message)}
-      />
+      <>
+        <CameraView
+          style={styles.fill}
+          facing="back"
+          onMountError={({ message }) => setMountError(message)}
+        />
+        {/* La cámara mira hacia donde mira el jugador, así que la flecha siempre apunta al frente. */}
+        <View style={styles.avatarLayer} pointerEvents="none">
+          <View style={styles.avatarScale}>
+            <PlayerAvatar heading={0} cameraHeading={0} />
+          </View>
+        </View>
+      </>
     );
   }
 
@@ -85,6 +95,14 @@ const styles = StyleSheet.create({
   },
   fill: {
     flex: 1,
+  },
+  avatarLayer: {
+    ...StyleSheet.absoluteFill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarScale: {
+    transform: [{ scale: 2 }],
   },
   center: {
     flex: 1,
