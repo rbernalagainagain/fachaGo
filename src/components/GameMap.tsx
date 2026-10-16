@@ -30,13 +30,21 @@ export function GameMap({ position, heading }: Props) {
   const markerCoordinate = useSmoothPosition(position, MOVE_DURATION);
 
   useEffect(() => {
-    // Solo pasamos el centro para conservar el giro, la inclinación y el zoom del jugador.
-    mapRef.current?.animateCamera({ center: position }, { duration: MOVE_DURATION });
+    // Solo pasamos centro e inclinación para conservar el giro y el zoom del jugador.
+    // La inclinación va siempre porque en Apple Maps `pitchEnabled` no bloquea el gesto.
+    mapRef.current?.animateCamera(
+      { center: position, pitch: INITIAL_PITCH },
+      { duration: MOVE_DURATION },
+    );
   }, [position]);
 
-  const syncCameraHeading = async () => {
+  const onRegionChangeComplete = async () => {
     const camera = await mapRef.current?.getCamera();
-    if (camera) setCameraHeading(camera.heading);
+    if (!camera) return;
+    setCameraHeading(camera.heading);
+    if (Math.abs(camera.pitch - INITIAL_PITCH) > 1) {
+      mapRef.current?.animateCamera({ pitch: INITIAL_PITCH }, { duration: 300 });
+    }
   };
 
   return (
@@ -61,7 +69,7 @@ export function GameMap({ position, heading }: Props) {
       showsCompass={false}
       showsPointsOfInterests={false}
       toolbarEnabled={false}
-      onRegionChangeComplete={syncCameraHeading}
+      onRegionChangeComplete={onRegionChangeComplete}
     >
       <Marker coordinate={markerCoordinate} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges>
         <PlayerAvatar heading={heading} cameraHeading={cameraHeading} />

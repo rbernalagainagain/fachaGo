@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import * as Location from 'expo-location';
 
 export type PlayerPosition = {
@@ -8,15 +8,26 @@ export type PlayerPosition = {
 
 type PlayerLocationState =
   | { status: 'loading' }
-  | { status: 'denied' }
+  | { status: 'denied'; canAskAgain: boolean }
+  | { status: 'services-off' }
   | { status: 'error'; message: string }
-  | { status: 'ready'; position: PlayerPosition; heading: number };
+  | { status: 'ready'; position: PlayerPosition; heading: number; gpsLost: boolean };
+
+/** Tiempo máximo esperando la primera posición antes de dar el GPS por fallido (ms). */
+const FIRST_FIX_TIMEOUT = 20000;
 
 /**
  * Sigue la posición GPS y la orientación de la brújula del jugador.
+ * `retry` vuelve a pedir permiso y a arrancar el GPS.
  */
-export function usePlayerLocation(): PlayerLocationState {
+export function usePlayerLocation(): PlayerLocationState & { retry: () => void } {
   const [state, setState] = useState<PlayerLocationState>({ status: 'loading' });
+  const [attempt, setAttempt] = useState(0);
+
+  const retry = useCallback(() => {
+    setState({ status: 'loading' });
+    setAttempt((n) => n + 1);
+  }, []);
 
   useEffect(() => {
     let positionSub: Location.LocationSubscription | undefined;
@@ -24,11 +35,40 @@ export function usePlayerLocation(): PlayerLocationState {
     let cancelled = false;
     let heading = 0;
 
-    async function start() {
-      const { status } = await Location.requestForegroundPermissionsAsync();
+    const firstFixTimer = setTimeout(() => {
       if (cancelled) return;
-      if (status !== 'granted') {
-        setState({ status: 'denied' });
+      setState((prev) =>
+        prev.status === 'loading'
+          ? {
+              status: 'error',
+              message: 'El GPS no da tu posición. Prueba en un sitio más despejado.',
+            }
+          : prev,
+      );
+    }, FIRST_FIX_TIMEOUT);
+
+    // Un fallo del GPS con el juego en marcha no quita el mapa: se avisa y se sigue esperando.
+    const onGpsError = () => {
+      if (cancelled) return;
+      setState((prev) =>
+        prev.status === 'ready'
+          ? { ...prev, gpsLost: true }
+          : { status: 'error', message: 'No se pudo obtener tu ubicación.' },
+      );
+    };
+
+    async function start() {
+      const permission = await Location.requestForegroundPermissionsAsync();
+      if (cancelled) return;
+      if (permission.status !== 'granted') {
+        setState({ status: 'denied', canAskAgain: permission.canAskAgain });
+        return;
+      }
+
+      const servicesEnabled = await Location.hasServicesEnabledAsync();
+      if (cancelled) return;
+      if (!servicesEnabled) {
+        setState({ status: 'services-off' });
         return;
       }
 
@@ -43,15 +83,20 @@ export function usePlayerLocation(): PlayerLocationState {
             status: 'ready',
             position: { latitude: coords.latitude, longitude: coords.longitude },
             heading,
+            gpsLost: false,
           });
         },
-        (message) => setState({ status: 'error', message }),
+        onGpsError,
       );
 
-      headingSub = await Location.watchHeadingAsync(({ trueHeading, magHeading }) => {
-        heading = trueHeading >= 0 ? trueHeading : magHeading;
-        setState((prev) => (prev.status === 'ready' ? { ...prev, heading } : prev));
-      });
+      // Sin brújula el juego sigue funcionando; la flecha se queda apuntando al norte.
+      headingSub = await Location.watchHeadingAsync(
+        ({ trueHeading, magHeading }) => {
+          heading = trueHeading >= 0 ? trueHeading : magHeading;
+          setState((prev) => (prev.status === 'ready' ? { ...prev, heading } : prev));
+        },
+        () => {},
+      );
 
       // Si el componente se desmontó mientras esperábamos las suscripciones.
       if (cancelled) {
@@ -60,16 +105,15 @@ export function usePlayerLocation(): PlayerLocationState {
       }
     }
 
-    start().catch((e: unknown) => {
-      if (!cancelled) setState({ status: 'error', message: String(e) });
-    });
+    start().catch(onGpsError);
 
     return () => {
       cancelled = true;
+      clearTimeout(firstFixTimer);
       positionSub?.remove();
       headingSub?.remove();
     };
-  }, []);
+  }, [attempt]);
 
-  return state;
+  return { ...state, retry };
 }
