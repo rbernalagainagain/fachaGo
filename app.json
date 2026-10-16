@@ -28,6 +28,13 @@
           "locationWhenInUsePermission": "FachaGo usa tu ubicación para moverte por el mapa del juego."
         }
       ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "FachaGo usa la cámara para mostrar el juego sobre el mundo real.",
+          "recordAudioAndroid": false
+        }
+      ],
       "expo-status-bar"
     ]
   }

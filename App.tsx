@@ -1,13 +1,15 @@
 import { StatusBar } from 'expo-status-bar';
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
+import { CameraScreen } from './src/components/CameraScreen';
 import { GameMap } from './src/components/GameMap';
 import { usePlayerLocation } from './src/hooks/usePlayerLocation';
 
 export default function App() {
   const location = usePlayerLocation();
+  const [cameraOpen, setCameraOpen] = useState(false);
 
   let content: ReactNode;
   switch (location.status) {
@@ -20,6 +22,17 @@ export default function App() {
               <Text style={styles.banner}>Señal GPS perdida. Buscando tu posición…</Text>
             </SafeAreaView>
           )}
+          <SafeAreaView edges={['bottom']} style={styles.bottomBar} pointerEvents="box-none">
+            <Pressable
+              onPress={() => setCameraOpen(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Abrir cámara"
+              style={({ pressed }) => [styles.cameraButton, pressed && styles.buttonPressed]}
+            >
+              <Text style={styles.cameraIcon}>📷</Text>
+            </Pressable>
+          </SafeAreaView>
+          {cameraOpen && <CameraScreen onClose={() => setCameraOpen(false)} />}
         </>
       );
       break;
@@ -157,6 +170,25 @@ const styles = StyleSheet.create({
   },
   buttonLabelSecondary: {
     color: '#0369a1',
+  },
+  bottomBar: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+  },
+  cameraButton: {
+    margin: 20,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#ffffff',
+    borderWidth: 3,
+    borderColor: '#0ea5e9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cameraIcon: {
+    fontSize: 26,
   },
   bannerArea: {
     position: 'absolute',
